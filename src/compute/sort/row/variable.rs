@@ -116,3 +116,56 @@ pub fn encode<'a, I: Iterator<Item = Option<&'a [u8]>>>(out: &mut Rows, i: I, op
         }
     }
 }
+
+/// Encode without [`Rows`] and [`SortOptions`], just write to the buffer.
+pub fn encode_raw<'a, I: Iterator<Item = Option<&'a [u8]>>>(buffer: &mut [u8], i: I) {
+    let mut offset = 0_usize;
+    for maybe_val in i {
+        match maybe_val {
+            Some(val) if val.is_empty() => {
+                buffer[offset] = 1;
+                offset += 1;
+            }
+            Some(val) => {
+                let block_count = div_ceil(val.len(), BLOCK_SIZE);
+                let end_offset = offset + 1 + block_count * (BLOCK_SIZE + 1);
+                let to_write = &mut buffer[offset..end_offset];
+
+                // Write `2_u8` to demarcate as non-empty, non-null string
+                to_write[0] = NON_EMPTY_SENTINEL;
+
+                let chunks = val.chunks_exact(BLOCK_SIZE);
+                let remainder = chunks.remainder();
+                for (input, output) in chunks
+                    .clone()
+                    .zip(to_write[1..].chunks_exact_mut(BLOCK_SIZE + 1))
+                {
+                    let input: &[u8; BLOCK_SIZE] = input.try_into().unwrap();
+                    let out_block: &mut [u8; BLOCK_SIZE] =
+                        (&mut output[..BLOCK_SIZE]).try_into().unwrap();
+
+                    *out_block = *input;
+
+                    // Indicate that there are further blocks to follow
+                    output[BLOCK_SIZE] = BLOCK_CONTINUATION;
+                }
+
+                if !remainder.is_empty() {
+                    let start_offset = 1 + (block_count - 1) * (BLOCK_SIZE + 1);
+                    to_write[start_offset..start_offset + remainder.len()]
+                        .copy_from_slice(remainder);
+                    *to_write.last_mut().unwrap() = remainder.len() as u8;
+                } else {
+                    // We must overwrite the continuation marker written by the loop above
+                    *to_write.last_mut().unwrap() = BLOCK_SIZE as u8;
+                }
+
+                offset = end_offset;
+            }
+            None => {
+                buffer[offset] = 0;
+                offset += 1;
+            }
+        }
+    }
+}

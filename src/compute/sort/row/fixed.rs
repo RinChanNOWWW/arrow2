@@ -196,3 +196,23 @@ pub fn encode<T: FixedLengthEncoding, I: IntoIterator<Item = Option<T>>>(
         *offset = end_offset;
     }
 }
+
+/// Encode without [`Rows`] and [`SortOptions`], just write to the buffer.
+pub fn encode_raw<T: FixedLengthEncoding, I: IntoIterator<Item = Option<T>>>(
+    buffer: &mut [u8],
+    iter: I,
+) {
+    let mut offset = 0_usize;
+    for maybe_val in iter {
+        let end_offset = offset + T::ENCODED_LEN;
+        if let Some(val) = maybe_val {
+            let to_write = &mut buffer[offset..end_offset];
+            to_write[0] = 1;
+            let encoded = val.encode();
+            to_write[1..].copy_from_slice(encoded.as_ref())
+        } else {
+            buffer[offset] = 0;
+        }
+        offset = end_offset;
+    }
+}

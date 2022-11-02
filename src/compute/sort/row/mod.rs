@@ -38,7 +38,10 @@ use std::{
 };
 
 use crate::{
-    array::{Array, BinaryArray, BooleanArray, DictionaryArray, PrimitiveArray, Utf8Array},
+    array::{
+        Array, BinaryArray, BooleanArray, DictionaryArray, FixedSizeListArray, ListArray,
+        PrimitiveArray, Utf8Array,
+    },
     datatypes::PhysicalType,
     error::*,
 };
@@ -52,6 +55,7 @@ use self::{
 mod dictionary;
 mod fixed;
 mod interner;
+mod list;
 mod variable;
 
 /// Converts `Box<dyn Array>` columns into a row-oriented format.
@@ -487,6 +491,39 @@ fn new_empty_rows(
                     }
                 }
             }),
+            PhysicalType::FixedSizeList => {
+                for (a, length) in array
+                    .as_any()
+                    .downcast_ref::<FixedSizeListArray>()
+                    .unwrap()
+                    .iter()
+                    .zip(lengths.iter_mut())
+                {
+                    *length += list::encode_len(a)?;
+                }
+            }
+            PhysicalType::List => {
+                for (a, length) in array
+                    .as_any()
+                    .downcast_ref::<ListArray<i32>>()
+                    .unwrap()
+                    .iter()
+                    .zip(lengths.iter_mut())
+                {
+                    *length += list::encode_len(a)?;
+                }
+            }
+            PhysicalType::LargeList => {
+                for (a, length) in array
+                    .as_any()
+                    .downcast_ref::<ListArray<i64>>()
+                    .unwrap()
+                    .iter()
+                    .zip(lengths.iter_mut())
+                {
+                    *length += list::encode_len(a)?;
+                }
+            }
             t => {
                 return Err(Error::NotYetImplemented(format!(
                     "not yet implemented: {:?}",
@@ -603,6 +640,33 @@ fn encode_column(
                 .unwrap();
             encode_dictionary(out, column, dictionary.unwrap(), opts);
         }),
+        PhysicalType::FixedSizeList => list::encode(
+            out,
+            column
+                .as_any()
+                .downcast_ref::<FixedSizeListArray>()
+                .unwrap()
+                .iter(),
+            opts,
+        ),
+        PhysicalType::List => list::encode(
+            out,
+            column
+                .as_any()
+                .downcast_ref::<ListArray<i32>>()
+                .unwrap()
+                .iter(),
+            opts,
+        ),
+        PhysicalType::LargeList => list::encode(
+            out,
+            column
+                .as_any()
+                .downcast_ref::<ListArray<i64>>()
+                .unwrap()
+                .iter(),
+            opts,
+        ),
         t => unimplemented!("not yet implemented: {:?}", t),
     }
 }
@@ -620,8 +684,8 @@ mod tests {
     use crate::{
         array::{
             Array, DictionaryKey, Float32Array, Int128Array, Int16Array, Int256Array, Int32Array,
-            MutableDictionaryArray, MutablePrimitiveArray, MutableUtf8Array, NullArray, Offset,
-            TryExtend, TryPush,
+            MutableDictionaryArray, MutableListArray, MutablePrimitiveArray, MutableUtf8Array,
+            NullArray, Offset, TryExtend, TryPush,
         },
         compute::sort::build_compare,
         datatypes::{DataType, IntegerType},
@@ -913,6 +977,33 @@ mod tests {
         assert_eq!(rows.row(3), rows.row(4));
         assert_eq!(rows.row(4), rows.row(5));
         assert!(rows.row(3) < rows.row(0));
+    }
+
+    #[test]
+    fn test_list() {
+        let mut list_arary = MutableListArray::<i32, MutablePrimitiveArray<i32>>::new();
+        list_arary
+            .try_push(Some([Some(1), Some(2), Some(3)]))
+            .unwrap(); // row 0
+        list_arary
+            .try_push(Some([Some(1), Some(2), Some(4)]))
+            .unwrap(); // row 1
+        list_arary.try_push(Some([])).unwrap(); // row 2
+        list_arary
+            .try_push(Some([Some(3), Some(4), Some(5)]))
+            .unwrap(); // row 3
+        list_arary.try_push(Some([Some(4)])).unwrap(); // row 4
+        list_arary.try_push(Some([Some(4), Some(5)])).unwrap(); // row 5
+        let column: ListArray<i32> = list_arary.into();
+
+        let mut converter = RowConverter::new(vec![SortField::new(column.data_type().clone())]);
+        let rows = converter.convert_columns(&[column.to_boxed()]).unwrap();
+
+        assert!(rows.row(2) < rows.row(0));
+        assert!(rows.row(0) < rows.row(1));
+        assert!(rows.row(1) < rows.row(3));
+        assert!(rows.row(3) < rows.row(4));
+        assert!(rows.row(4) < rows.row(5));
     }
 
     fn generate_primitive_array<K>(len: usize, valid_percent: f64) -> PrimitiveArray<K>
