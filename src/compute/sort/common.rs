@@ -24,7 +24,8 @@ fn k_element_sort_inner<I: Index, T, G, F>(
             cmp(&rhs, &lhs)
         };
         let (before, _, _) = indices.select_nth_unstable_by(limit, &mut compare);
-        before.sort_unstable_by(&mut compare);
+        // before.sort_unstable_by(&mut compare);
+        glidesort::sort_by(before, &mut compare);
     } else {
         let mut compare = |lhs: &I, rhs: &I| {
             let lhs = get(lhs.to_usize());
@@ -32,7 +33,8 @@ fn k_element_sort_inner<I: Index, T, G, F>(
             cmp(&lhs, &rhs)
         };
         let (before, _, _) = indices.select_nth_unstable_by(limit, &mut compare);
-        before.sort_unstable_by(&mut compare);
+        // before.sort_unstable_by(&mut compare);
+        glidesort::sort_by(before, &mut compare);
     }
 }
 
@@ -57,13 +59,23 @@ fn sort_unstable_by<I, T, G, F>(
     }
 
     if descending {
-        indices.sort_unstable_by(|lhs, rhs| {
+        // indices.sort_unstable_by(|lhs, rhs| {
+        //     let lhs = get(lhs.to_usize());
+        //     let rhs = get(rhs.to_usize());
+        //     cmp(&rhs, &lhs)
+        // })
+        glidesort::sort_by(indices, |lhs, rhs| {
             let lhs = get(lhs.to_usize());
             let rhs = get(rhs.to_usize());
             cmp(&rhs, &lhs)
         })
     } else {
-        indices.sort_unstable_by(|lhs, rhs| {
+        // indices.sort_unstable_by(|lhs, rhs| {
+        //     let lhs = get(lhs.to_usize());
+        //     let rhs = get(rhs.to_usize());
+        //     cmp(&lhs, &rhs)
+        // })
+        glidesort::sort_by(indices, |lhs, rhs| {
             let lhs = get(lhs.to_usize());
             let rhs = get(rhs.to_usize());
             cmp(&lhs, &rhs)

@@ -204,11 +204,13 @@ pub fn lexsort_to_indices_impl<I: Index>(
         } else {
             &mut values[..]
         };
-        before.sort_unstable_by(lex_comparator);
+        // before.sort_unstable_by(lex_comparator);
+        glidesort::sort_by(before, lex_comparator);
         values.truncate(limit);
         values.shrink_to_fit();
     } else {
-        values.sort_unstable_by(lex_comparator);
+        // values.sort_unstable_by(lex_comparator);
+        glidesort::sort_by(&mut values, lex_comparator);
     }
 
     let data_type = I::PRIMITIVE.into();

@@ -35,10 +35,12 @@ where
 {
     if descending {
         let (before, _, _) = values.select_nth_unstable_by(limit, |x, y| cmp(y, x));
-        before.sort_unstable_by(|x, y| cmp(x, y));
+        // before.sort_unstable_by(|x, y| cmp(x, y));
+        glidesort::sort_by(before, |x, y| cmp(y, x));
     } else {
         let (before, _, _) = values.select_nth_unstable_by(limit, |x, y| cmp(x, y));
-        before.sort_unstable_by(|x, y| cmp(x, y));
+        // before.sort_unstable_by(|x, y| cmp(x, y));
+        glidesort::sort_by(before, |x, y| cmp(x, y));
     }
 }
 
@@ -52,9 +54,11 @@ where
     }
 
     if descending {
-        values.sort_unstable_by(|x, y| cmp(y, x));
+        // values.sort_unstable_by(|x, y| cmp(y, x));
+        glidesort::sort_by(values, |x, y| cmp(y, x))
     } else {
-        values.sort_unstable_by(cmp);
+        // values.sort_unstable_by(cmp);
+        glidesort::sort_by(values, cmp)
     };
 }
 
